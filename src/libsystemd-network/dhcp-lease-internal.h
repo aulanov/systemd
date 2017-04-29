@@ -75,6 +75,8 @@ struct sd_dhcp_lease {
         uint16_t mtu; /* 0 if unset */
 
         char *domainname;
+        char **search_domains;
+        size_t search_domains_count;
         char *hostname;
         char *root_path;
 

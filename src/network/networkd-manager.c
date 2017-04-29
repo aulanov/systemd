@@ -911,19 +911,33 @@ static int manager_save(Manager *m) {
 
                 if (link->network->dhcp_use_domains != DHCP_USE_DOMAINS_NO) {
                         const char *domainname;
+                        char **domains = NULL;
 
                         r = sd_dhcp_lease_get_domainname(link->dhcp_lease, &domainname);
-                        if (r >= 0) {
+                        if (r < 0 && r != -ENODATA)
+                                return r;
 
-                                if (link->network->dhcp_use_domains == DHCP_USE_DOMAINS_YES)
-                                        r = ordered_set_put_strdup(search_domains, domainname);
-                                else
-                                        r = ordered_set_put_strdup(route_domains, domainname);
+                        r = sd_dhcp_lease_get_search_domains(link->dhcp_lease, &domains);
+                        if (r < 0 && r != -ENODATA)
+                                return r;
 
+                        if (link->network->dhcp_use_domains == DHCP_USE_DOMAINS_YES) {
+                                r = ordered_set_put_strdup(search_domains, domainname);
                                 if (r < 0)
                                         return r;
-                        } else if (r != -ENODATA)
-                                return r;
+
+                                r = ordered_set_put_strdupv(search_domains, domains);
+                                if (r < 0)
+                                        return r;
+                        } else {
+                                r = ordered_set_put_strdup(route_domains, domainname);
+                                if (r < 0)
+                                        return r;
+
+                                r = ordered_set_put_strdupv(route_domains, domains);
+                                if (r < 0)
+                                        return r;
+                        }
                 }
         }
 
