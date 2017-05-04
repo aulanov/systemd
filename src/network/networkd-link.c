@@ -3353,7 +3353,7 @@ int link_save(Link *link) {
                 fputs("DOMAINS=", f);
                 space = false;
                 /* First, put statically configured search domains, as recommended by
-                 * https://tools.ietf.org/search/rfc3397#section-4*/
+                 * https://tools.ietf.org/search/rfc3397#section-4 */
                 fputstrv(f, link->network->search_domains, NULL, &space);
 
                 /* Second, add DomainName and Domain Search List from DHCP if UseDomains is set.*/
@@ -3375,7 +3375,7 @@ int link_save(Link *link) {
 
                 fputs("ROUTE_DOMAINS=", f);
                 space = false;
-                fputstrv(f, link->network->route_domains, NULL, NULL);
+                fputstrv(f, link->network->route_domains, NULL, &space);
 
                 if (link->network->dhcp_use_domains == DHCP_USE_DOMAINS_ROUTE) {
                         NDiscDNSSL *dd;

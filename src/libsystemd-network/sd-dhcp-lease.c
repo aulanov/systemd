@@ -140,7 +140,6 @@ int sd_dhcp_lease_get_domainname(sd_dhcp_lease *lease, const char **domainname) 
         return 0;
 }
 
-
 int sd_dhcp_lease_get_hostname(sd_dhcp_lease *lease, const char **hostname) {
         assert_return(lease, -EINVAL);
         assert_return(hostname, -EINVAL);
@@ -398,20 +397,20 @@ static int lease_parse_domain(const uint8_t *option, size_t len, char **ret) {
         return 0;
 }
 
-/*Parses compressed domain names.*/
+/* Parses compressed domain names. */
 static int lease_parse_search_domains(const uint8_t *option, size_t len, char ***domains, size_t *domains_count) {
         _cleanup_strv_free_ char **names = NULL;
-        size_t pos = 0, jump_barrier = 0, next_chunk = 0, cnt = 0;
+        size_t pos = 0, cnt = 0;
         int r;
 
         assert(domains);
         assert(domains_count);
-        assert_return(option && len >1, -ENODATA);
-        assert_return(option[len - 1] == '\0', -EINVAL);
+        assert_return(option && len > 0, -ENODATA);
 
         while (pos < len) {
                 _cleanup_free_ char *ret = NULL;
                 size_t n = 0, allocated = 0;
+                size_t jump_barrier = pos, next_chunk = 0;
                 bool first = true;
 
                 for (;;) {
@@ -420,7 +419,6 @@ static int lease_parse_search_domains(const uint8_t *option, size_t len, char **
 
                         if (c == 0) {
                                 /* End of name */
-                                jump_barrier = pos - 1;
                                 break;
                         } else if (c <= 63) {
                                 const char *label;
@@ -428,7 +426,7 @@ static int lease_parse_search_domains(const uint8_t *option, size_t len, char **
                                 /* Literal label */
                                 label = (const char *)&option[pos];
                                 pos += c;
-                                if (pos > len)
+                                if (pos >= len)
                                         return -EMSGSIZE;
 
                                 if (!GREEDY_REALLOC(ret, allocated, n + !first + DNS_LABEL_ESCAPED_MAX))
@@ -444,27 +442,31 @@ static int lease_parse_search_domains(const uint8_t *option, size_t len, char **
                                         return r;
 
                                 n += r;
-                                continue;
                         } else if ((c & 0xc0) == 0xc0) {
                                 /* Pointer */
 
                                 uint8_t d;
                                 uint16_t ptr;
+
+                                if (pos >= len)
+                                        return -EMSGSIZE;
+
                                 d = option[pos++];
                                 ptr = (uint16_t) (c & ~0xc0) << 8 | (uint16_t) d;
 
-                                /* Jumps are limited to a prior occurrence of a complete domain (labels ending with 0),
-                                 * according to RFC1035 4.1.4. */
+                                /* Jumps are limited to a "prior occurrence" (RFC-1035 4.1.4) */
                                 if (ptr >= jump_barrier)
                                         return -EBADMSG;
+                                jump_barrier = ptr;
 
-                                /* Return to where we were as soon as the referred domain is parsed.*/
-                                next_chunk = pos;
+                                /* Return to where we were as soon as the referred domain is parsed. */
+                                if (next_chunk == 0)
+                                        next_chunk = pos;
 
                                 pos = ptr;
                         } else
                                 return -EBADMSG;
-                }  /*for(;;)*/
+                }
 
                 if (!GREEDY_REALLOC(ret, allocated, n + 1))
                         return -ENOMEM;
@@ -476,9 +478,9 @@ static int lease_parse_search_domains(const uint8_t *option, size_t len, char **
 
                 cnt++;
 
-                if (next_chunk > 0)
+                if (next_chunk != 0)
                       pos = next_chunk;
-        }  /*while (pos < len)*/
+        }
 
         *domains = names;
         names = NULL;
@@ -691,7 +693,6 @@ int dhcp_lease_parse_options(uint8_t code, uint8_t len, const void *option, void
                 break;
 
         case SD_DHCP_OPTION_DOMAIN_SEARCH_LIST:
-                log_debug("xyz: Parsing option 119");
                 r = lease_parse_search_domains(option, len, &lease->search_domains, &lease->search_domains_count);
                 if (r < 0)
                         log_debug_errno(r, "Failed to parse Domain Search List, ignoring: %m");
@@ -918,10 +919,9 @@ int dhcp_lease_save(sd_dhcp_lease *lease, const char *lease_file) {
                 fprintf(f, "DOMAINNAME=%s\n", string);
 
         r = sd_dhcp_lease_get_search_domains(lease, &search_domains);
-        bool space = false;
         if (r > 0) {
                 fputs("DOMAIN_SEARCH_LIST=", f);
-                fputstrv(f, search_domains, NULL, &space);
+                fputstrv(f, search_domains, NULL, NULL);
                 fputs("\n", f);
         }
 
@@ -936,7 +936,6 @@ int dhcp_lease_save(sd_dhcp_lease *lease, const char *lease_file) {
         r = sd_dhcp_lease_get_routes(lease, &routes);
         if (r > 0)
                 serialize_dhcp_routes(f, "ROUTES", routes, r);
-
 
         r = sd_dhcp_lease_get_timezone(lease, &string);
         if (r >= 0)
