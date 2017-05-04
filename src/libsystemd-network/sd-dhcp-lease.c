@@ -427,7 +427,7 @@ static int lease_parse_search_domains(const uint8_t *option, size_t len, char **
                                 label = (const char *)&option[pos];
                                 pos += c;
                                 if (pos >= len)
-                                        return -EMSGSIZE;
+                                        return -EBADMSG;
 
                                 if (!GREEDY_REALLOC(ret, allocated, n + !first + DNS_LABEL_ESCAPED_MAX))
                                         return -ENOMEM;
@@ -449,7 +449,7 @@ static int lease_parse_search_domains(const uint8_t *option, size_t len, char **
                                 uint16_t ptr;
 
                                 if (pos >= len)
-                                        return -EMSGSIZE;
+                                        return -EBADMSG;
 
                                 d = option[pos++];
                                 ptr = (uint16_t) (c & ~0xc0) << 8 | (uint16_t) d;
@@ -459,7 +459,7 @@ static int lease_parse_search_domains(const uint8_t *option, size_t len, char **
                                         return -EBADMSG;
                                 jump_barrier = ptr;
 
-                                /* Return to where we were as soon as the referred domain is parsed. */
+                                /* Save current location so we don't end up re-parsing what's parsed so far. */
                                 if (next_chunk == 0)
                                         next_chunk = pos;
 
